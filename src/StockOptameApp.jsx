@@ -323,18 +323,234 @@ export default function StockOptameApp() {
             <div style={{ background: 'white', padding: 24, borderRadius: 16 }}>
               <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>Pengaturan</h2>
               
-              <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, marginBottom: 8, cursor: 'pointer' }}>
-                <div style={{ fontWeight: 'bold', fontSize: 14 }}>Kelola Produk</div>
-                <div style={{ fontSize: 12, color: '#6c757d' }}>Tambah/edit produk</div>
+              <div onClick={() => setCurrentView('manage-products')} style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, marginBottom: 8, cursor: 'pointer' }}>
+                <div style={{ fontWeight: 'bold', fontSize: 14 }}>☕ Kelola Produk</div>
+                <div style={{ fontSize: 12, color: '#6c757d' }}>Tambah/edit produk (Latte, Cappuccino, dll)</div>
               </div>
-              <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, marginBottom: 8, cursor: 'pointer' }}>
-                <div style={{ fontWeight: 'bold', fontSize: 14 }}>Kelola Resep</div>
-                <div style={{ fontSize: 12, color: '#6c757d' }}>Atur komposisi bahan</div>
+              <div onClick={() => setCurrentView('manage-recipes')} style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, marginBottom: 8, cursor: 'pointer' }}>
+                <div style={{ fontWeight: 'bold', fontSize: 14 }}>📝 Kelola Resep</div>
+                <div style={{ fontSize: 12, color: '#6c757d' }}>Atur komposisi bahan per produk</div>
               </div>
-              <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, cursor: 'pointer' }}>
-                <div style={{ fontWeight: 'bold', fontSize: 14 }}>Kelola Bahan</div>
-                <div style={{ fontSize: 12, color: '#6c757d' }}>Tambah/edit bahan baku</div>
+              <div onClick={() => setCurrentView('manage-ingredients')} style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, cursor: 'pointer' }}>
+                <div style={{ fontWeight: 'bold', fontSize: 14 }}>🥛 Kelola Bahan</div>
+                <div style={{ fontSize: 12, color: '#6c757d' }}>Tambah/edit bahan baku dan stok minimum</div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {currentView === 'manage-products' && (
+          <div>
+            <button onClick={() => setCurrentView('settings')} style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', marginBottom: 16 }}>
+              ← Kembali ke Pengaturan
+            </button>
+
+            <div style={{ background: 'white', padding: 24, borderRadius: 16, marginBottom: 16 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>☕ Kelola Produk</h2>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 14 }}>Nama Produk Baru</label>
+                <input 
+                  type="text" 
+                  placeholder="Contoh: Mocha"
+                  style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 8, border: '2px solid #ced4da', marginBottom: 12 }}
+                />
+              </div>
+
+              <button style={{ width: '100%', background: '#28a745', color: 'white', fontWeight: 'bold', padding: 16, borderRadius: 8, border: 'none', fontSize: 16, cursor: 'pointer', marginBottom: 24 }}>
+                ➕ Tambah Produk Baru
+              </button>
+
+              <h3 style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>Daftar Produk</h3>
+              {products.map(product => (
+                <div key={product.id} style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', fontSize: 14 }}>{product.name}</div>
+                    <div style={{ fontSize: 12, color: '#6c757d' }}>
+                      Bahan: {Object.keys(product.recipe).map(ing => ing).join(', ')}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button style={{ background: '#007bff', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>
+                      ✏️ Edit
+                    </button>
+                    <button style={{ background: '#dc3545', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>
+                      🗑️ Hapus
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {currentView === 'manage-recipes' && (
+          <div>
+            <button onClick={() => setCurrentView('settings')} style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', marginBottom: 16 }}>
+              ← Kembali ke Pengaturan
+            </button>
+
+            <div style={{ background: 'white', padding: 24, borderRadius: 16 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>📝 Kelola Resep</h2>
+              
+              {products.map(product => (
+                <div key={product.id} style={{ border: '2px solid #e9ecef', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: '#667eea' }}>
+                    ☕ {product.name}
+                  </h3>
+
+                  <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 14, marginBottom: 8 }}>Komposisi Resep:</div>
+                    {Object.entries(product.recipe).map(([ingredient, amount]) => {
+                      const stock = stocks.find(s => s.name.toLowerCase().includes(ingredient));
+                      return (
+                        <div key={ingredient} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #dee2e6' }}>
+                          <span style={{ fontSize: 14 }}>
+                            {stock ? stock.name : ingredient}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input 
+                              type="number" 
+                              defaultValue={amount}
+                              style={{ width: 80, padding: 8, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da', textAlign: 'center' }}
+                            />
+                            <span style={{ fontSize: 14, color: '#6c757d', minWidth: 30 }}>
+                              {stock ? stock.unit : 'unit'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 12 }}>Tambah Bahan ke Resep</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <select style={{ flex: 1, padding: 8, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}>
+                        <option value="">Pilih Bahan</option>
+                        {stocks.map(s => (
+                          <option key={s.id} value={s.name}>{s.name} ({s.unit})</option>
+                        ))}
+                      </select>
+                      <input 
+                        type="number" 
+                        placeholder="Jumlah"
+                        style={{ width: 100, padding: 8, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}
+                      />
+                      <button style={{ background: '#28a745', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
+                        ➕
+                      </button>
+                    </div>
+                  </div>
+
+                  <button style={{ width: '100%', background: '#007bff', color: 'white', fontWeight: 'bold', padding: 12, borderRadius: 8, border: 'none', fontSize: 14, cursor: 'pointer', marginTop: 12 }}>
+                    💾 Simpan Perubahan Resep
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {currentView === 'manage-ingredients' && (
+          <div>
+            <button onClick={() => setCurrentView('settings')} style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', marginBottom: 16 }}>
+              ← Kembali ke Pengaturan
+            </button>
+
+            <div style={{ background: 'white', padding: 24, borderRadius: 16, marginBottom: 16 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>🥛 Kelola Bahan Baku</h2>
+              
+              <div style={{ marginBottom: 24, padding: 16, background: '#e7f3ff', borderRadius: 8 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>➕ Tambah Bahan Baru</h3>
+                
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 12 }}>Nama Bahan</label>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: Gula (Sugar)"
+                    style={{ width: '100%', padding: 10, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 12 }}>Satuan</label>
+                    <select style={{ width: '100%', padding: 10, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}>
+                      <option value="ml">ml (mililiter)</option>
+                      <option value="g">g (gram)</option>
+                      <option value="pcs">pcs (pieces)</option>
+                      <option value="kg">kg (kilogram)</option>
+                      <option value="L">L (liter)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 12 }}>Stok Minimum</label>
+                    <input 
+                      type="number" 
+                      placeholder="500"
+                      style={{ width: '100%', padding: 10, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}
+                    />
+                  </div>
+                </div>
+
+                <button style={{ width: '100%', background: '#28a745', color: 'white', fontWeight: 'bold', padding: 12, borderRadius: 8, border: 'none', fontSize: 14, cursor: 'pointer' }}>
+                  ✅ Tambah Bahan
+                </button>
+              </div>
+
+              <h3 style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>📦 Daftar Bahan Baku</h3>
+              {stocks.map(stock => {
+                const status = getStockStatus(stock);
+                const statusColor = status === 'low' ? '#dc3545' : status === 'medium' ? '#ffc107' : '#28a745';
+                const statusText = status === 'low' ? 'Rendah' : status === 'medium' ? 'Sedang' : 'Aman';
+                
+                return (
+                  <div key={stock.id} style={{ border: '2px solid #e9ecef', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
+                      <div>
+                        <h4 style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}>{stock.name}</h4>
+                        <div style={{ fontSize: 12, color: '#6c757d' }}>
+                          Stok Saat Ini: <strong>{stock.current} {stock.unit}</strong>
+                        </div>
+                      </div>
+                      <span style={{ background: statusColor, color: 'white', padding: '4px 12px', borderRadius: 12, fontSize: 12, fontWeight: 'bold' }}>
+                        {statusText}
+                      </span>
+                    </div>
+
+                    <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 12, color: '#6c757d', marginBottom: 4 }}>Satuan</label>
+                          <input 
+                            type="text" 
+                            defaultValue={stock.unit}
+                            style={{ width: '100%', padding: 8, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 12, color: '#6c757d', marginBottom: 4 }}>Stok Minimum</label>
+                          <input 
+                            type="number" 
+                            defaultValue={stock.min}
+                            style={{ width: '100%', padding: 8, fontSize: 14, borderRadius: 6, border: '1px solid #ced4da' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button style={{ flex: 1, background: '#007bff', color: 'white', fontWeight: 'bold', padding: 10, borderRadius: 6, border: 'none', fontSize: 14, cursor: 'pointer' }}>
+                        💾 Simpan
+                      </button>
+                      <button style={{ background: '#dc3545', color: 'white', fontWeight: 'bold', padding: 10, borderRadius: 6, border: 'none', fontSize: 14, cursor: 'pointer', minWidth: 80 }}>
+                        🗑️ Hapus
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
