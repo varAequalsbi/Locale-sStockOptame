@@ -7,8 +7,10 @@ export default function StockOptameApp() {
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [selectedStock, setSelectedStock] = useState('');
-  const [restockAmount, setRestockAmount] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelReasonOther, setCancelReasonOther] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [saleToCancel, setSaleToCancel] = useState(null);
 
   useEffect(() => {
     const cachedStocks = localStorage.getItem('stocks');
@@ -85,7 +87,9 @@ export default function StockOptameApp() {
       id: Date.now(),
       product: selectedProduct,
       quantity: quantity,
-      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+      recipe: product.recipe,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      cancelled: false
     };
 
     const updatedSales = [newSale, ...todaySales];
@@ -96,7 +100,54 @@ export default function StockOptameApp() {
     
     setSelectedProduct('');
     setQuantity(1);
-    alert('Penjualan berhasil dicatat!');
+    alert('✅ Penjualan berhasil dicatat!');
+  };
+
+  const handleCancelSale = (saleId) => {
+    const sale = todaySales.find(s => s.id === saleId);
+    if (!sale || sale.cancelled) return;
+    
+    setSaleToCancel(sale);
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelSale = () => {
+    const finalReason = cancelReason === 'Lainnya' ? cancelReasonOther : cancelReason;
+    
+    if (!finalReason || finalReason.trim() === '') {
+      alert('❗ Mohon isi alasan pembatalan!');
+      return;
+    }
+
+    const newStocks = [...stocks];
+    Object.entries(saleToCancel.recipe).forEach(([ingredient, amount]) => {
+      const stockIndex = newStocks.findIndex(s => s.name.toLowerCase().includes(ingredient));
+      if (stockIndex !== -1) {
+        newStocks[stockIndex].current += amount * saleToCancel.quantity;
+      }
+    });
+
+    const updatedSales = todaySales.map(sale => 
+      sale.id === saleToCancel.id 
+        ? { 
+            ...sale, 
+            cancelled: true,
+            cancelReason: finalReason,
+            cancelTime: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          } 
+        : sale
+    );
+
+    setStocks(newStocks);
+    setTodaySales(updatedSales);
+    localStorage.setItem('stocks', JSON.stringify(newStocks));
+    localStorage.setItem('todaySales', JSON.stringify(updatedSales));
+    
+    setShowCancelModal(false);
+    setSaleToCancel(null);
+    setCancelReason('');
+    setCancelReasonOther('');
+    alert('✅ Pesanan berhasil dibatalkan!\nStok telah dikembalikan.');
   };
 
   const handleRestock = () => {
@@ -124,6 +175,146 @@ export default function StockOptameApp() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%)', paddingBottom: 80 }}>
+      {/* Cancel Modal */}
+      {showCancelModal && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          background: 'rgba(0,0,0,0.5)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 16
+        }}>
+          <div style={{ 
+            background: 'white', 
+            borderRadius: 16, 
+            padding: 24, 
+            maxWidth: 500, 
+            width: '100%',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#dc3545' }}>
+              ⚠️ Batalkan Pesanan
+            </h3>
+            
+            {saleToCancel && (
+              <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#6c757d', fontSize: 14 }}>Produk:</span>
+                  <span style={{ fontWeight: 'bold', fontSize: 14 }}>{saleToCancel.product}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#6c757d', fontSize: 14 }}>Jumlah:</span>
+                  <span style={{ fontWeight: 'bold', fontSize: 14 }}>×{saleToCancel.quantity}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6c757d', fontSize: 14 }}>Waktu:</span>
+                  <span style={{ fontWeight: 'bold', fontSize: 14 }}>{saleToCancel.time}</span>
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 14 }}>
+                Alasan Pembatalan <span style={{ color: '#dc3545' }}>*</span>
+              </label>
+              <select 
+                value={cancelReason}
+                onChange={(e) => {
+                  setCancelReason(e.target.value);
+                  if (e.target.value !== 'Lainnya') {
+                    setCancelReasonOther('');
+                  }
+                }}
+                style={{ 
+                  width: '100%', 
+                  padding: 12, 
+                  fontSize: 14, 
+                  borderRadius: 8, 
+                  border: '2px solid #ced4da',
+                  marginBottom: 8
+                }}
+              >
+                <option value="">-- Pilih Alasan --</option>
+                <option value="Pesanan salah">Pesanan salah</option>
+                <option value="Customer membatalkan">Customer membatalkan</option>
+                <option value="Bahan habis">Bahan habis</option>
+                <option value="Kesalahan input">Kesalahan input</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+              
+              {cancelReason === 'Lainnya' && (
+                <textarea
+                  placeholder="Tulis alasan lainnya..."
+                  value={cancelReasonOther}
+                  onChange={(e) => setCancelReasonOther(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    fontSize: 14,
+                    borderRadius: 8,
+                    border: '2px solid #ced4da',
+                    minHeight: 80,
+                    resize: 'vertical',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              )}
+            </div>
+
+            <div style={{ background: '#fff3cd', padding: 12, borderRadius: 8, marginBottom: 16, border: '1px solid #ffc107' }}>
+              <div style={{ fontSize: 13, color: '#856404' }}>
+                ℹ️ Stok akan dikembalikan setelah pembatalan
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button 
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setSaleToCancel(null);
+                  setCancelReason('');
+                }}
+                style={{ 
+                  flex: 1,
+                  background: '#6c757d', 
+                  color: 'white', 
+                  fontWeight: 'bold', 
+                  padding: 14, 
+                  borderRadius: 8, 
+                  border: 'none', 
+                  fontSize: 14, 
+                  cursor: 'pointer' 
+                }}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={confirmCancelSale}
+                style={{ 
+                  flex: 1,
+                  background: '#dc3545', 
+                  color: 'white', 
+                  fontWeight: 'bold', 
+                  padding: 14, 
+                  borderRadius: 8, 
+                  border: 'none', 
+                  fontSize: 14, 
+                  cursor: 'pointer' 
+                }}
+              >
+                ✓ Konfirmasi Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ maxWidth: 800, margin: '0 auto', padding: 16 }}>
         <div style={{ textAlign: 'center', marginBottom: 16, paddingTop: 8 }}>
           <h1 style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 0 }}>StockOptame</h1>
@@ -227,12 +418,55 @@ export default function StockOptameApp() {
               <div style={{ background: 'white', padding: 24, borderRadius: 16 }}>
                 <h3 style={{ fontWeight: 'bold', marginBottom: 16 }}>Penjualan Hari Ini</h3>
                 {todaySales.slice(0, 10).map(sale => (
-                  <div key={sale.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 12, background: '#f8f9fa', borderRadius: 8, marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 'bold', fontSize: 14 }}>{sale.product}</div>
+                  <div 
+                    key={sale.id} 
+                    style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: 12, 
+                      background: sale.cancelled ? '#f8d7da' : '#f8f9fa', 
+                      borderRadius: 8, 
+                      marginBottom: 8,
+                      border: sale.cancelled ? '2px solid #dc3545' : 'none',
+                      opacity: sale.cancelled ? 0.7 : 1
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 'bold', fontSize: 14, textDecoration: sale.cancelled ? 'line-through' : 'none' }}>
+                        {sale.product}
+                        {sale.cancelled && <span style={{ color: '#dc3545', marginLeft: 8, fontSize: 12 }}>(DIBATALKAN)</span>}
+                      </div>
                       <div style={{ fontSize: 12, color: '#6c757d' }}>{sale.time}</div>
+                      {sale.cancelled && sale.cancelReason && (
+                        <div style={{ fontSize: 11, color: '#721c24', marginTop: 4, fontStyle: 'italic' }}>
+                          📝 Alasan: {sale.cancelReason}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ background: '#007bff', color: 'white', padding: '6px 12px', borderRadius: 16, fontWeight: 'bold' }}>×{sale.quantity}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ background: sale.cancelled ? '#6c757d' : '#007bff', color: 'white', padding: '6px 12px', borderRadius: 16, fontWeight: 'bold' }}>
+                        ×{sale.quantity}
+                      </div>
+                      {!sale.cancelled && (
+                        <button 
+                          onClick={() => handleCancelSale(sale.id)}
+                          style={{ 
+                            background: '#dc3545', 
+                            color: 'white', 
+                            border: 'none', 
+                            padding: '6px 12px', 
+                            borderRadius: 8, 
+                            cursor: 'pointer', 
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                          }}
+                          title="Batalkan pesanan"
+                        >
+                          ❌ Batal
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -295,10 +529,18 @@ export default function StockOptameApp() {
             <div style={{ background: 'white', padding: 24, borderRadius: 16 }}>
               <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>Laporan Hari Ini</h2>
               
-              <div style={{ background: '#d4edda', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: '#155724' }}>Total Penjualan</div>
-                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#155724' }}>
-                  {todaySales.reduce((sum, sale) => sum + sale.quantity, 0)} item
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div style={{ background: '#d4edda', padding: 16, borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#155724' }}>Total Penjualan</div>
+                  <div style={{ fontSize: 28, fontWeight: 'bold', color: '#155724' }}>
+                    {todaySales.filter(s => !s.cancelled).reduce((sum, sale) => sum + sale.quantity, 0)} item
+                  </div>
+                </div>
+                <div style={{ background: '#fff3cd', padding: 16, borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#856404' }}>Dibatalkan</div>
+                  <div style={{ fontSize: 28, fontWeight: 'bold', color: '#856404' }}>
+                    {todaySales.filter(s => s.cancelled).reduce((sum, sale) => sum + sale.quantity, 0)} item
+                  </div>
                 </div>
               </div>
 
@@ -311,6 +553,30 @@ export default function StockOptameApp() {
                 </div>
               )}
             </div>
+
+            {todaySales.filter(s => s.cancelled).length > 0 && (
+              <div style={{ background: 'white', padding: 24, borderRadius: 16, marginTop: 16 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12, color: '#dc3545' }}>🚫 Pesanan yang Dibatalkan</h3>
+                {todaySales.filter(s => s.cancelled).map(sale => (
+                  <div key={sale.id} style={{ padding: 12, background: '#f8d7da', borderRadius: 8, marginBottom: 8, border: '1px solid #dc3545' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: 14, textDecoration: 'line-through' }}>{sale.product}</div>
+                        <div style={{ fontSize: 12, color: '#721c24' }}>
+                          Dibuat: {sale.time} | Dibatalkan: {sale.cancelTime}
+                        </div>
+                      </div>
+                      <div style={{ background: '#dc3545', color: 'white', padding: '4px 8px', borderRadius: 12, fontSize: 12, fontWeight: 'bold' }}>
+                        ×{sale.quantity}
+                      </div>
+                    </div>
+                    <div style={{ background: '#fff', padding: 8, borderRadius: 6, fontSize: 12, color: '#721c24' }}>
+                      <strong>📝 Alasan:</strong> {sale.cancelReason}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
