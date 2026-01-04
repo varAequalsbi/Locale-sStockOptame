@@ -11,6 +11,10 @@ export default function StockOptameApp() {
   const [cancelReasonOther, setCancelReasonOther] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [saleToCancel, setSaleToCancel] = useState(null);
+  const [selectedStock, setSelectedStock] = useState('');
+  const [restockAmount, setRestockAmount] = useState('');
+  const [saleTime, setSaleTime] = useState('');
+
 
   useEffect(() => {
     const cachedStocks = localStorage.getItem('stocks');
@@ -55,10 +59,12 @@ export default function StockOptameApp() {
   };
 
   const handleSale = () => {
-    if (!selectedProduct || quantity < 1) {
-      alert('Pilih produk dan jumlah yang valid!');
-      return;
-    }
+    if (!selectedProduct || quantity < 1 || !saleTime) {
+    alert('Pilih produk, jumlah, dan waktu yang valid!');
+    setSaleTime('');
+    return;
+  }
+
 
     const product = products.find(p => p.name === selectedProduct);
     if (!product) return;
@@ -88,7 +94,7 @@ export default function StockOptameApp() {
       product: selectedProduct,
       quantity: quantity,
       recipe: product.recipe,
-      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      time: saleTime,
       cancelled: false
     };
 
@@ -405,7 +411,23 @@ export default function StockOptameApp() {
                   style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 8, border: '2px solid #ced4da' }}
                 />
               </div>
-
+              <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 8, fontSize: 14 }}>
+                Waktu Penjualan
+              </label>
+              <input
+                type="time"
+                value={saleTime}
+                onChange={(e) => setSaleTime(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  fontSize: 16,
+                  borderRadius: 8,
+                  border: '2px solid #ced4da'
+                }}
+              />
+            </div>
               <button 
                 onClick={handleSale}
                 style={{ width: '100%', background: '#28a745', color: 'white', fontWeight: 'bold', padding: 16, borderRadius: 8, border: 'none', fontSize: 16, cursor: 'pointer' }}
