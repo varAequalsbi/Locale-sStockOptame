@@ -1,75 +1,104 @@
+// src/App.js
 import React, { useState, useEffect } from 'react';
+import { db } from './firebase'; // Import the db connection
+import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 
 export default function StockOptameApp() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [stocks, setStocks] = useState([]);
   const [todaySales, setTodaySales] = useState([]);
   const [products, setProducts] = useState([]);
-  
+  const [loading, setLoading] = useState(true);
+
   // Transaction State
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [saleTime, setSaleTime] = useState('');
-  
+
   // Restock State
   const [selectedStock, setSelectedStock] = useState('');
   const [restockAmount, setRestockAmount] = useState('');
-  
+
   // Management State
   const [newProductName, setNewProductName] = useState('');
   const [newIngredientName, setNewIngredientName] = useState('');
   const [newIngredientUnit, setNewIngredientUnit] = useState('');
-  const [newIngredientMin, setNewIngredientMin] = useState();
+  const [newIngredientMin, setNewIngredientMin] = useState('');
 
-  // --- NEW: CANCELLATION STATE ---
+  // Cancel State
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [saleToCancel, setSaleToCancel] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
 
   const CANCEL_REASONS = [
-    "Salah Input Produk",
-    "Pelanggan Batal Beli",
-    "Ubah Pesanan",
-    "Stok Tidak Cukup",
-    "Pembayaran Gagal"
+    "Salah Input Produk", "Pelanggan Batal Beli", "Ubah Pesanan", "Stok Tidak Cukup", "Pembayaran Gagal"
   ];
 
-  // --- INITIALIZATION ---
+  // Helper to get today's Date ID (e.g., "2023-10-25")
+  const getTodayID = () => new Date().toISOString().split('T')[0];
+
+  // --- FIREBASE SYNC (REALTIME) ---
   useEffect(() => {
-    const cachedStocks = localStorage.getItem('stocks');
-    const cachedSales = localStorage.getItem('todaySales');
-    const cachedProducts = localStorage.getItem('products');
-    
-    if (cachedStocks) {
-      setStocks(JSON.parse(cachedStocks));
-    } else {
-      const initialStocks = [
-        { id: 1, name: 'Susu (Milk)', current: 2200, unit: 'ml', min: 1000 },
-        { id: 2, name: 'Kopi (Coffee Beans)', current: 450, unit: 'g', min: 500 },
-        { id: 3, name: 'Air (Water)', current: 5000, unit: 'ml', min: 2000 },
-        { id: 4, name: 'Gelas (Cups)', current: 45, unit: 'pcs', min: 30 }
-      ];
-      setStocks(initialStocks);
-      localStorage.setItem('stocks', JSON.stringify(initialStocks));
-    }
-    
-    if (cachedSales) {
-      setTodaySales(JSON.parse(cachedSales));
-    }
-    
-    if (cachedProducts) {
-      setProducts(JSON.parse(cachedProducts));
-    } else {
-      const initialProducts = [
-        { id: 1, name: 'Latte', recipe: { 'susu': 120, 'kopi': 16, 'gelas': 1 } },
-        { id: 2, name: 'Cappuccino', recipe: { 'susu': 100, 'kopi': 18, 'gelas': 1 } },
-        { id: 3, name: 'Americano', recipe: { 'air': 150, 'kopi': 16, 'gelas': 1 } },
-        { id: 4, name: 'Espresso', recipe: { 'kopi': 18, 'gelas': 1 } }
-      ];
-      setProducts(initialProducts);
-      localStorage.setItem('products', JSON.stringify(initialProducts));
-    }
+    setLoading(true);
+
+    // 1. Listen to PRODUCTS (Single Document Read)
+    const unsubProducts = onSnapshot(doc(db, "data", "products"), (doc) => {
+      if (doc.exists()) {
+        setProducts(doc.data().list || []);
+      } else {
+        // Initialize if empty
+        const initialProducts = [
+            { id: 1, name: 'Latte', recipe: { 'susu': 120, 'kopi': 16, 'gelas': 1 } },
+            { id: 2, name: 'Cappuccino', recipe: { 'susu': 100, 'kopi': 18, 'gelas': 1 } },
+            { id: 3, name: 'Americano', recipe: { 'air': 150, 'kopi': 16, 'gelas': 1 } },
+            { id: 4, name: 'Espresso', recipe: { 'kopi': 18, 'gelas': 1 } }
+        ];
+        setDoc(doc.ref, { list: initialProducts });
+      }
+    });
+
+    // 2. Listen to STOCKS (Single Document Read)
+    const unsubStocks = onSnapshot(doc(db, "data", "inventory"), (doc) => {
+      if (doc.exists()) {
+        setStocks(doc.data().list || []);
+      } else {
+        const initialStocks = [
+            { id: 1, name: 'Susu (Milk)', current: 2200, unit: 'ml', min: 1000 },
+            { id: 2, name: 'Kopi (Coffee Beans)', current: 450, unit: 'g', min: 500 },
+            { id: 3, name: 'Air (Water)', current: 5000, unit: 'ml', min: 2000 },
+            { id: 4, name: 'Gelas (Cups)', current: 45, unit: 'pcs', min: 30 }
+        ];
+        setDoc(doc.ref, { list: initialStocks });
+      }
+    });
+
+    // 3. Listen to TODAY'S SALES (Single Document Read)
+    const todayDocID = getTodayID();
+    const unsubSales = onSnapshot(doc(db, "sales", todayDocID), (doc) => {
+      if (doc.exists()) {
+        setTodaySales(doc.data().list || []);
+      } else {
+        setTodaySales([]); // No sales yet today
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      unsubProducts();
+      unsubStocks();
+      unsubSales();
+    };
   }, []);
+
+  // --- SAVING FUNCTIONS (WRITES) ---
+  const saveToFirebase = async (collection, docId, dataList) => {
+    try {
+      await setDoc(doc(db, collection, docId), { list: dataList }, { merge: true });
+    } catch (error) {
+      console.error("Error saving:", error);
+      alert("Gagal menyimpan ke database internet. Cek koneksi.");
+    }
+  };
 
   const getStockStatus = (stock) => {
     if (stock.current < stock.min) return 'low';
@@ -79,22 +108,20 @@ export default function StockOptameApp() {
 
   // --- LOGIC FUNCTIONS ---
 
-  // 1. Trigger the Modal
   const initiateCancelSale = (sale) => {
     setSaleToCancel(sale);
     setCancelReason('');
     setCancelModalOpen(true);
   };
 
-  // 2. Execute Cancellation with Reason
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (!saleToCancel) return;
     if (!cancelReason.trim()) {
       alert("Mohon isi alasan pembatalan!");
       return;
     }
 
-    // Restore the stocks
+    // Restore stocks
     const newStocks = [...stocks];
     Object.entries(saleToCancel.recipe).forEach(([ingredientKey, amount]) => {
       const stockIndex = newStocks.findIndex(s => s.name.toLowerCase().includes(ingredientKey));
@@ -103,7 +130,7 @@ export default function StockOptameApp() {
       }
     });
 
-    // Mark sale as Cancelled (instead of deleting it completely, so we keep the record)
+    // Update Sales list
     const updatedSales = todaySales.map(s => {
       if (s.id === saleToCancel.id) {
         return { ...s, cancelled: true, cancelReason: cancelReason };
@@ -111,19 +138,18 @@ export default function StockOptameApp() {
       return s;
     });
 
-    // Update State & Storage
+    // Optimistic Update (UI updates immediately)
     setStocks(newStocks);
     setTodaySales(updatedSales);
-    localStorage.setItem('stocks', JSON.stringify(newStocks));
-    localStorage.setItem('todaySales', JSON.stringify(updatedSales));
-
-    // Reset UI
     setCancelModalOpen(false);
     setSaleToCancel(null);
-    setCancelReason('');
+
+    // Sync to Firebase
+    await saveToFirebase("data", "inventory", newStocks);
+    await saveToFirebase("sales", getTodayID(), updatedSales);
   };
 
-  const handleSale = () => {
+  const handleSale = async () => {
     if (!selectedProduct || quantity < 1 || !saleTime) {
       alert('Pilih produk, jumlah, dan waktu yang valid!');
       return;
@@ -139,8 +165,8 @@ export default function StockOptameApp() {
     Object.entries(product.recipe).forEach(([ingredientKey, amount]) => {
       const stock = newStocks.find(s => s.name.toLowerCase().includes(ingredientKey));
       if (!stock) {
-         canProcess = false;
-         missingItem = `Data stok untuk "${ingredientKey}" tidak ditemukan`;
+          canProcess = false;
+          missingItem = `Data stok untuk "${ingredientKey}" tidak ditemukan`;
       } else if (stock.current < amount * quantity) {
         canProcess = false;
         missingItem = `Stok ${stock.name} tidak cukup`;
@@ -152,6 +178,7 @@ export default function StockOptameApp() {
       return;
     }
 
+    // Deduct Stock
     Object.entries(product.recipe).forEach(([ingredientKey, amount]) => {
       const stockIndex = newStocks.findIndex(s => s.name.toLowerCase().includes(ingredientKey));
       if (stockIndex !== -1) {
@@ -170,18 +197,21 @@ export default function StockOptameApp() {
     };
 
     const updatedSales = [newSale, ...todaySales];
+
+    // Optimistic Update
     setStocks(newStocks);
     setTodaySales(updatedSales);
-    localStorage.setItem('stocks', JSON.stringify(newStocks));
-    localStorage.setItem('todaySales', JSON.stringify(updatedSales));
-    
     setSelectedProduct('');
     setQuantity(1);
-    setSaleTime('');
-    alert('✅ Penjualan berhasil dicatat!');
+    
+    // Sync to Firebase
+    await saveToFirebase("data", "inventory", newStocks);
+    await saveToFirebase("sales", getTodayID(), updatedSales);
+    
+    alert('✅ Penjualan berhasil dicatat (Tersimpan di Cloud)!');
   };
 
-  const handleRestock = () => {
+  const handleRestock = async () => {
     if (!selectedStock || !restockAmount || restockAmount < 1) {
       alert('Pilih bahan dan jumlah yang valid!');
       return;
@@ -192,85 +222,87 @@ export default function StockOptameApp() {
       }
       return stock;
     });
+
     setStocks(newStocks);
-    localStorage.setItem('stocks', JSON.stringify(newStocks));
+    await saveToFirebase("data", "inventory", newStocks);
+    
     setSelectedStock('');
     setRestockAmount('');
     alert('Stok berhasil ditambahkan!');
     setCurrentView('dashboard');
   };
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!newProductName.trim()) return;
     const newProduct = { id: Date.now(), name: newProductName.trim(), recipe: {} };
     const updated = [...products, newProduct];
     setProducts(updated);
-    localStorage.setItem('products', JSON.stringify(updated));
     setNewProductName('');
+    await saveToFirebase("data", "products", updated);
   };
 
-  const handleDeleteProduct = (id) => {
+  const handleDeleteProduct = async (id) => {
     const updated = products.filter(p => p.id !== id);
     setProducts(updated);
-    localStorage.setItem('products', JSON.stringify(updated));
+    await saveToFirebase("data", "products", updated);
   };
 
-  const handleAddIngredient = () => {
+  const handleAddIngredient = async () => {
     if (!newIngredientName) return;
     const newStock = { id: Date.now(), name: newIngredientName, unit: newIngredientUnit, current: 0, min: Number(newIngredientMin) };
     const updated = [...stocks, newStock];
     setStocks(updated);
-    localStorage.setItem('stocks', JSON.stringify(updated));
     setNewIngredientName('');
+    await saveToFirebase("data", "inventory", updated);
   };
 
-  const handleDeleteStock = (id) => {
+  const handleDeleteStock = async (id) => {
     if(window.confirm("Apakah Anda yakin ingin menghapus bahan ini?")) {
       const updated = stocks.filter(s => s.id !== id);
       setStocks(updated);
-      localStorage.setItem('stocks', JSON.stringify(updated));
+      await saveToFirebase("data", "inventory", updated);
     }
   };
 
-  const updateRecipeAmount = (productId, key, value) => {
+  const updateRecipeAmount = async (productId, key, value) => {
     const updated = products.map(p => {
       if (p.id !== productId) return p;
       return { ...p, recipe: { ...p.recipe, [key]: Number(value) } };
     });
     setProducts(updated);
-    localStorage.setItem('products', JSON.stringify(updated));
+    await saveToFirebase("data", "products", updated);
   };
 
-  const addIngredientToRecipe = (productId, name) => {
+  const addIngredientToRecipe = async (productId, name) => {
     const key = name.toLowerCase().split(' ')[0];
     const updated = products.map(p => {
       if (p.id !== productId) return p;
       return { ...p, recipe: { ...p.recipe, [key]: 1 } };
     });
     setProducts(updated);
-    localStorage.setItem('products', JSON.stringify(updated));
+    await saveToFirebase("data", "products", updated);
   };
 
-  const removeIngredientFromRecipe = (productId, keyToRemove) => {
+  const removeIngredientFromRecipe = async (productId, keyToRemove) => {
     const updated = products.map(p => {
       if (p.id !== productId) return p;
-      
       const newRecipe = { ...p.recipe };
       delete newRecipe[keyToRemove];
-      
       return { ...p, recipe: newRecipe };
     });
     setProducts(updated);
-    localStorage.setItem('products', JSON.stringify(updated));
+    await saveToFirebase("data", "products", updated);
   };
 
-  // --- RENDER ---
+  if (loading) return <div style={{padding: 20}}>Menghubungkan ke database...</div>;
+
+  // --- RENDER (Original Layout Preserved) ---
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5', paddingBottom: 100, fontFamily: 'sans-serif' }}>
       
       {/* HEADER */}
       <div style={{ background: 'white', padding: '16px 20px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', position: 'sticky', top: 0, zIndex: 10 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>StockOptame</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>StockOptame <span style={{fontSize: 10, color: 'green', background: '#e6fffa', padding: '2px 6px', borderRadius: 4, verticalAlign: 'middle'}}>CLOUD ACTIVE</span></h1>
       </div>
 
       <div style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
@@ -280,7 +312,7 @@ export default function StockOptameApp() {
           <div className="view-dashboard">
             <div style={{ background: 'linear-gradient(135deg, #0061f2 0%, #00ba88 100%)', color: 'white', padding: 24, borderRadius: 16, marginBottom: 24, boxShadow: '0 4px 12px rgba(0,97,242,0.3)' }}>
               <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 4 }}>Halo, Barista! 👋</h2>
-              <p style={{ fontSize: 14, opacity: 0.9, margin: 0 }}>Siap mencatat penjualan hari ini?</p>
+              <p style={{ fontSize: 14, opacity: 0.9, margin: 0 }}>Data tersinkronisasi otomatis.</p>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
@@ -345,7 +377,7 @@ export default function StockOptameApp() {
             </div>
 
             <h3 style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12, color: '#444' }}>Riwayat Hari Ini</h3>
-            {todaySales.length === 0 ? <p style={{ color: '#888', fontStyle: 'italic' }}>Belum ada penjualan.</p> : null}
+            {todaySales.length === 0 ? <p style={{ color: '#888', fontStyle: 'italic' }}>Belum ada penjualan hari ini.</p> : null}
 
             {todaySales.map(sale => (
               <div key={sale.id} style={{ 
@@ -661,22 +693,21 @@ export default function StockOptameApp() {
 
             <div style={{ display: 'flex', gap: 12 }}>
               <button 
-                onClick={() => setCancelModalOpen(false)} 
+                onClick={() => setCancelModalOpen(false)}
                 style={{ flex: 1, padding: 12, borderRadius: 8, border: '1px solid #ddd', background: 'white', cursor: 'pointer' }}
               >
-                Kembali
+                Batal
               </button>
               <button 
-                onClick={handleConfirmCancel} 
+                onClick={handleConfirmCancel}
                 style={{ flex: 1, padding: 12, borderRadius: 8, border: 'none', background: '#dc2626', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
               >
-                Batalkan
+                Konfirmasi
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
