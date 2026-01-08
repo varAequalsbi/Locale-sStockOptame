@@ -10,6 +10,6 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
-
+console.log("Firebase Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
