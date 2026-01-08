@@ -1,7 +1,6 @@
-// src/App.js
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase'; // Import the db connection
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase'; 
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 export default function StockOptameApp() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -41,26 +40,24 @@ export default function StockOptameApp() {
   useEffect(() => {
     setLoading(true);
 
-    // 1. Listen to PRODUCTS (Single Document Read)
-    const unsubProducts = onSnapshot(doc(db, "data", "products"), (doc) => {
-      if (doc.exists()) {
-        setProducts(doc.data().list || []);
+    // 1. Listen to PRODUCTS
+    const unsubProducts = onSnapshot(doc(db, "data", "products"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        setProducts(docSnapshot.data().list || []);
       } else {
-        // Initialize if empty
         const initialProducts = [
             { id: 1, name: 'Latte', recipe: { 'susu': 120, 'kopi': 16, 'gelas': 1 } },
             { id: 2, name: 'Cappuccino', recipe: { 'susu': 100, 'kopi': 18, 'gelas': 1 } },
             { id: 3, name: 'Americano', recipe: { 'air': 150, 'kopi': 16, 'gelas': 1 } },
-            { id: 4, name: 'Espresso', recipe: { 'kopi': 18, 'gelas': 1 } }
         ];
-        setDoc(doc.ref, { list: initialProducts });
+        setDoc(doc(db, "data", "products"), { list: initialProducts });
       }
     });
 
-    // 2. Listen to STOCKS (Single Document Read)
-    const unsubStocks = onSnapshot(doc(db, "data", "inventory"), (doc) => {
-      if (doc.exists()) {
-        setStocks(doc.data().list || []);
+    // 2. Listen to STOCKS
+    const unsubStocks = onSnapshot(doc(db, "data", "inventory"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        setStocks(docSnapshot.data().list || []);
       } else {
         const initialStocks = [
             { id: 1, name: 'Susu (Milk)', current: 2200, unit: 'ml', min: 1000 },
@@ -68,17 +65,17 @@ export default function StockOptameApp() {
             { id: 3, name: 'Air (Water)', current: 5000, unit: 'ml', min: 2000 },
             { id: 4, name: 'Gelas (Cups)', current: 45, unit: 'pcs', min: 30 }
         ];
-        setDoc(doc.ref, { list: initialStocks });
+        setDoc(doc(db, "data", "inventory"), { list: initialStocks });
       }
     });
 
-    // 3. Listen to TODAY'S SALES (Single Document Read)
+    // 3. Listen to TODAY'S SALES
     const todayDocID = getTodayID();
-    const unsubSales = onSnapshot(doc(db, "sales", todayDocID), (doc) => {
-      if (doc.exists()) {
-        setTodaySales(doc.data().list || []);
+    const unsubSales = onSnapshot(doc(db, "sales", todayDocID), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        setTodaySales(docSnapshot.data().list || []);
       } else {
-        setTodaySales([]); // No sales yet today
+        setTodaySales([]); 
       }
       setLoading(false);
     });
@@ -121,6 +118,9 @@ export default function StockOptameApp() {
       return;
     }
 
+    // CONFIRMATION ALERT
+    if (!window.confirm(`Yakin batalkan transaksi ${saleToCancel.product}? Stok akan dikembalikan.`)) return;
+
     // Restore stocks
     const newStocks = [...stocks];
     Object.entries(saleToCancel.recipe).forEach(([ingredientKey, amount]) => {
@@ -138,7 +138,7 @@ export default function StockOptameApp() {
       return s;
     });
 
-    // Optimistic Update (UI updates immediately)
+    // UI Updates
     setStocks(newStocks);
     setTodaySales(updatedSales);
     setCancelModalOpen(false);
@@ -157,6 +157,9 @@ export default function StockOptameApp() {
 
     const product = products.find(p => p.name === selectedProduct);
     if (!product) return;
+
+    // CONFIRMATION ALERT
+    if(!window.confirm(`Konfirmasi Penjualan:\n${product.name} (${quantity}x)\nJam: ${saleTime}`)) return;
 
     const newStocks = [...stocks];
     let canProcess = true;
@@ -198,17 +201,15 @@ export default function StockOptameApp() {
 
     const updatedSales = [newSale, ...todaySales];
 
-    // Optimistic Update
     setStocks(newStocks);
     setTodaySales(updatedSales);
     setSelectedProduct('');
     setQuantity(1);
     
-    // Sync to Firebase
     await saveToFirebase("data", "inventory", newStocks);
     await saveToFirebase("sales", getTodayID(), updatedSales);
     
-    alert('✅ Penjualan berhasil dicatat (Tersimpan di Cloud)!');
+    alert('✅ Penjualan berhasil dicatat!');
   };
 
   const handleRestock = async () => {
@@ -216,6 +217,10 @@ export default function StockOptameApp() {
       alert('Pilih bahan dan jumlah yang valid!');
       return;
     }
+
+    // CONFIRMATION ALERT
+    if(!window.confirm(`Yakin ingin menambahkan stok ${selectedStock} sebanyak ${restockAmount}?`)) return;
+
     const newStocks = stocks.map(stock => {
       if (stock.name === selectedStock) {
         return { ...stock, current: stock.current + parseInt(restockAmount) };
@@ -234,6 +239,9 @@ export default function StockOptameApp() {
 
   const handleAddProduct = async () => {
     if (!newProductName.trim()) return;
+    
+    if(!window.confirm(`Tambah produk baru: ${newProductName}?`)) return;
+
     const newProduct = { id: Date.now(), name: newProductName.trim(), recipe: {} };
     const updated = [...products, newProduct];
     setProducts(updated);
@@ -242,6 +250,8 @@ export default function StockOptameApp() {
   };
 
   const handleDeleteProduct = async (id) => {
+    if(!window.confirm("Yakin hapus produk ini?")) return;
+
     const updated = products.filter(p => p.id !== id);
     setProducts(updated);
     await saveToFirebase("data", "products", updated);
@@ -249,6 +259,9 @@ export default function StockOptameApp() {
 
   const handleAddIngredient = async () => {
     if (!newIngredientName) return;
+    
+    if(!window.confirm(`Tambah bahan baku baru: ${newIngredientName}?`)) return;
+
     const newStock = { id: Date.now(), name: newIngredientName, unit: newIngredientUnit, current: 0, min: Number(newIngredientMin) };
     const updated = [...stocks, newStock];
     setStocks(updated);
@@ -257,7 +270,7 @@ export default function StockOptameApp() {
   };
 
   const handleDeleteStock = async (id) => {
-    if(window.confirm("Apakah Anda yakin ingin menghapus bahan ini?")) {
+    if(window.confirm("Apakah Anda yakin ingin menghapus bahan ini? Data akan hilang permanen.")) {
       const updated = stocks.filter(s => s.id !== id);
       setStocks(updated);
       await saveToFirebase("data", "inventory", updated);
@@ -284,6 +297,8 @@ export default function StockOptameApp() {
   };
 
   const removeIngredientFromRecipe = async (productId, keyToRemove) => {
+    if(!window.confirm(`Hapus bahan ${keyToRemove} dari resep ini?`)) return;
+
     const updated = products.map(p => {
       if (p.id !== productId) return p;
       const newRecipe = { ...p.recipe };
@@ -296,7 +311,7 @@ export default function StockOptameApp() {
 
   if (loading) return <div style={{padding: 20}}>Menghubungkan ke database...</div>;
 
-  // --- RENDER (Original Layout Preserved) ---
+  // --- RENDER ---
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5', paddingBottom: 100, fontFamily: 'sans-serif' }}>
       
@@ -408,14 +423,8 @@ export default function StockOptameApp() {
                   <button 
                     onClick={() => initiateCancelSale(sale)}
                     style={{
-                      background: '#fee2e2',
-                      color: '#dc2626',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold'
+                      background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '8px',
+                      padding: '8px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold'
                     }}
                   >
                     Batal
@@ -595,119 +604,55 @@ export default function StockOptameApp() {
       </div>
 
       {/* FIXED BOTTOM NAVBAR */}
-      <div style={{ 
-        position: 'fixed', 
-        bottom: 0, 
-        left: 0, 
-        width: '100%', 
-        background: 'white', 
-        borderTop: '1px solid #eee', 
-        display: 'flex', 
-        paddingBottom: 'env(safe-area-inset-bottom)', // for iPhone X+
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
-        zIndex: 1000
-      }}>
-        <button 
-          onClick={() => setCurrentView('dashboard')} 
-          style={{ 
-            flex: 1, 
-            background: 'none', 
-            border: 'none', 
-            padding: '12px 0', 
-            cursor: 'pointer',
-            color: currentView === 'dashboard' ? '#0061f2' : '#9ca3af' 
-          }}
-        >
+      <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', background: 'white', borderTop: '1px solid #eee', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)', boxShadow: '0 -2px 10px rgba(0,0,0,0.05)', zIndex: 1000 }}>
+        <button onClick={() => setCurrentView('dashboard')} style={{ flex: 1, background: 'none', border: 'none', padding: '12px 0', cursor: 'pointer', color: currentView === 'dashboard' ? '#0061f2' : '#9ca3af' }}>
           <div style={{ fontSize: 20 }}>🏠</div>
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: currentView === 'dashboard' ? 'bold' : 'normal' }}>Home</div>
         </button>
-        
-        <button 
-          onClick={() => setCurrentView('reports')} 
-          style={{ 
-            flex: 1, 
-            background: 'none', 
-            border: 'none', 
-            padding: '12px 0', 
-            cursor: 'pointer',
-            color: currentView === 'reports' ? '#0061f2' : '#9ca3af' 
-          }}
-        >
+        <button onClick={() => setCurrentView('reports')} style={{ flex: 1, background: 'none', border: 'none', padding: '12px 0', cursor: 'pointer', color: currentView === 'reports' ? '#0061f2' : '#9ca3af' }}>
           <div style={{ fontSize: 20 }}>📊</div>
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: currentView === 'reports' ? 'bold' : 'normal' }}>Laporan</div>
         </button>
-        
-        <button 
-          onClick={() => setCurrentView('settings')} 
-          style={{ 
-            flex: 1, 
-            background: 'none', 
-            border: 'none', 
-            padding: '12px 0', 
-            cursor: 'pointer',
-            color: currentView.startsWith('settings') || currentView.startsWith('manage') ? '#0061f2' : '#9ca3af' 
-          }}
-        >
+        <button onClick={() => setCurrentView('settings')} style={{ flex: 1, background: 'none', border: 'none', padding: '12px 0', cursor: 'pointer', color: currentView.startsWith('settings') || currentView.startsWith('manage') ? '#0061f2' : '#9ca3af' }}>
           <div style={{ fontSize: 20 }}>⚙️</div>
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: currentView === 'settings' ? 'bold' : 'normal' }}>Setting</div>
         </button>
       </div>
 
-      {/* === NEW: CANCEL REASON MODAL === */}
+      {/* === COMPLETED: CANCEL REASON MODAL === */}
       {cancelModalOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000
-        }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
           <div style={{ background: 'white', padding: 24, borderRadius: 16, width: '85%', maxWidth: 400 }}>
             <h3 style={{ marginTop: 0, marginBottom: 12 }}>Batalkan Transaksi?</h3>
-            <p style={{ fontSize: 14, color: '#666', marginBottom: 16 }}>
-              Stok akan dikembalikan. Masukkan alasan pembatalan:
-            </p>
+            <p style={{ fontSize: 14, color: '#666', marginBottom: 16 }}>Stok akan dikembalikan. Masukkan alasan pembatalan:</p>
             
-            {/* Input Reason */}
             <input 
-              value={cancelReason} 
-              onChange={e => setCancelReason(e.target.value)} 
-              placeholder="Ketik alasan pembatalan..."
-              style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ddd', marginBottom: 12, boxSizing: 'border-box' }}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Ketik alasan manual..."
+              style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ddd', marginBottom: 16, boxSizing: 'border-box' }}
             />
-
-            {/* Template Chips */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              {CANCEL_REASONS.map(reason => (
+            
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+              {CANCEL_REASONS.map(r => (
                 <button 
-                  key={reason}
-                  onClick={() => setCancelReason(reason)}
-                  style={{
-                    background: cancelReason === reason ? '#e0f2fe' : '#f3f4f6',
-                    color: cancelReason === reason ? '#0369a1' : '#4b5563',
-                    border: cancelReason === reason ? '1px solid #0ea5e9' : '1px solid transparent',
-                    borderRadius: 20, padding: '6px 12px', fontSize: 11, cursor: 'pointer'
-                  }}
+                  key={r} 
+                  onClick={() => setCancelReason(r)}
+                  style={{ background: cancelReason === r ? '#bfdbfe' : '#f3f4f6', border: 'none', padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', color: cancelReason === r ? '#1e40af' : '#374151' }}
                 >
-                  {reason}
+                  {r}
                 </button>
               ))}
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <button 
-                onClick={() => setCancelModalOpen(false)}
-                style={{ flex: 1, padding: 12, borderRadius: 8, border: '1px solid #ddd', background: 'white', cursor: 'pointer' }}
-              >
-                Batal
-              </button>
-              <button 
-                onClick={handleConfirmCancel}
-                style={{ flex: 1, padding: 12, borderRadius: 8, border: 'none', background: '#dc2626', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
-              >
-                Konfirmasi
-              </button>
+              <button onClick={() => setCancelModalOpen(false)} style={{ flex: 1, padding: 12, border: '1px solid #ddd', background: 'white', borderRadius: 8, cursor: 'pointer' }}>Tutup</button>
+              <button onClick={handleConfirmCancel} style={{ flex: 1, padding: 12, background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold' }}>Batalkan Transaksi</button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
