@@ -88,12 +88,27 @@ export default function StockOptameApp() {
   }, []);
 
   // --- SAVING FUNCTIONS (WRITES) ---
-  const saveToFirebase = async (collection, docId, dataList) => {
+  const saveToFirebase = async (collectionName, docId, dataList) => {
+    // 1. Log what we are trying to do
+    console.log(`📤 Attempting to save to: ${collectionName}/${docId}`);
+    console.log("Data Payload:", dataList);
+
     try {
-      await setDoc(doc(db, collection, docId), { list: dataList }, { merge: true });
+      const docRef = doc(db, collectionName, docId);
+      await setDoc(docRef, { list: dataList }, { merge: true });
+      
+      // 2. Log success
+      console.log(`✅ Success! Database updated: ${collectionName}/${docId}`);
     } catch (error) {
-      console.error("Error saving:", error);
-      alert("Gagal menyimpan ke database internet. Cek koneksi.");
+      // 3. Log the specific error code from Firebase
+      console.error("❌ FIREBASE ERROR:", error.code);
+      console.error("Full Error Message:", error.message);
+      
+      if (error.code === 'permission-denied') {
+        alert("Firebase Rules are blocking this write. Check your Rules tab!");
+      } else {
+        alert(`Gagal simpan: ${error.message}`);
+      }
     }
   };
 
