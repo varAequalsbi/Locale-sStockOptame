@@ -18,8 +18,8 @@ export default function StockOptameApp() {
   // Management State
   const [newProductName, setNewProductName] = useState('');
   const [newIngredientName, setNewIngredientName] = useState('');
-  const [newIngredientUnit, setNewIngredientUnit] = useState('g');
-  const [newIngredientMin, setNewIngredientMin] = useState(100);
+  const [newIngredientUnit, setNewIngredientUnit] = useState('');
+  const [newIngredientMin, setNewIngredientMin] = useState();
 
   // --- NEW: CANCELLATION STATE ---
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -514,7 +514,7 @@ export default function StockOptameApp() {
                  <input value={newIngredientUnit} onChange={e => setNewIngredientUnit(e.target.value)} placeholder="Satuan" style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 8 }} />
                  <input type="number" value={newIngredientMin} onChange={e => setNewIngredientMin(e.target.value)} placeholder="Min" style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 8 }} />
                </div>
-               <button onClick={handleAddIngredient} style={{ width: '100%', background: '#0e9f6e', color: 'white', border: 'none', borderRadius: 8, padding: 12 }}>Simpan Bahan</button>
+               <button onClick={handleAddIngredient} style={{ width: '100%', background: '#0e9f6e', color: 'white', border: 'none', borderRadius: 8, padding: 12 }} >Simpan Bahan</button>
 
                <div style={{ marginTop: 20 }}>
                  {stocks.map(s => (
